@@ -1,5 +1,3 @@
-#[get("/")]
-pub fn index() -> &'static str {
-    "Hello, world!"
-}
+pub mod client;
+pub mod views;
 

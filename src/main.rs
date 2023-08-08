@@ -1,10 +1,13 @@
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate rocket;
 
+use rocket_dyn_templates::Template;
 use std::net::TcpListener;
 use std::thread::spawn;
 use tungstenite::accept;
 
-use api::index;
+use api::client::client_api;
+use api::views::views;
 
 mod api;
 
@@ -26,5 +29,8 @@ fn rocket() -> _ {
             });
         }
     });
-    rocket::build().mount("/", routes![index])
+
+    rocket::build()
+        .attach(Template::fairing())
+        .mount("/", routes![client_api, views])
 }
