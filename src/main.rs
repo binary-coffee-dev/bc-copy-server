@@ -6,7 +6,7 @@ use std::net::TcpListener;
 use std::thread::spawn;
 use tungstenite::accept;
 
-use api::client::client_api;
+use api::api::client_api;
 use api::views::views;
 
 mod api;
