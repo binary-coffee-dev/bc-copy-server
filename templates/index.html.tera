@@ -6,7 +6,54 @@
     <title>Title</title>
 </head>
 <body>
-Hello, world!
+<button id="newClient">new client</button>
+<div>
+  <table>
+    <thead>
+      <tr>
+        <th>Client</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="clientList">
+      <tr>
+        <td>some</td>
+        <td>
+          <button>remove</button>
+          <button>edit</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<script>
+  var newClientButton = document.getElementById("newClient");
+  newClientButton.onclick = function() {
+    // some;
+    console.log("test");
+  };
+
+  // pulling client list (every 1sec)
+  var clientListEle = document.getElementById("clientList");
+  function cleanClientListEle() {
+    // clean elements
+    console.log("clean list");
+  }
+  function addClientEle() {
+    // add new element to the list
+    console.log("new client");
+  }
+  function requestList() {
+    // request list of clients from API
+    console.log("requesting list");
+    addClientEle();
+  }
+
+  setInterval(function() {
+    cleanClientListEle();
+    requestList();
+  }, 1000);
+</script>
 </body>
 </html>
 
