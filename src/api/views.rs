@@ -1,7 +1,13 @@
-use rocket_dyn_templates::{Template, context};
+use actix_web::{get, HttpResponse, Responder};
+use askama::Template;
+
+#[derive(Template)]
+#[template(path = "index.html")]
+struct Index {
+}
 
 #[get("/")]
-pub fn views() -> Template {
-    Template::render("index", context! { value: "asd"})
+pub async fn views() -> impl Responder {
+    HttpResponse::Ok().body(Index{}.render().unwrap())
 }
 

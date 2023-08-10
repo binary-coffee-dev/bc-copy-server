@@ -1,7 +1,6 @@
-#[macro_use]
-extern crate rocket;
+use actix_cors::Cors;
+use actix_web::{App, HttpServer};
 
-use rocket_dyn_templates::Template;
 use std::net::TcpListener;
 use std::thread::spawn;
 use tungstenite::accept;
@@ -11,8 +10,8 @@ use api::views::views;
 
 mod api;
 
-#[launch]
-fn rocket() -> _ {
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     spawn(|| {
         let server = TcpListener::bind("127.0.0.1:9001").unwrap();
         for stream in server.incoming() {
@@ -30,7 +29,12 @@ fn rocket() -> _ {
         }
     });
 
-    rocket::build()
-        .attach(Template::fairing())
-        .mount("/", routes![client_api, views])
+    // Ok(()).await
+    HttpServer::new(|| {
+        let cors = Cors::default().allow_any_origin().allow_any_method().allow_any_header();
+        App::new().wrap(cors).service(client_api).service(views)
+    })
+    .bind(("127.0.0.1", 4000))?
+    .run()
+    .await
 }
