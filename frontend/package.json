@@ -1,0 +1,22 @@
+{
+  "name": "copy-service-frontend",
+  "version": "1.0.0",
+  "description": "Build in frontend for copy service application server",
+  "scripts": {
+    "build:tail": "npx tailwindcss -i src/styles.css -o ./dist/styles.css --minify",
+    "build:tail:watch": "npx tailwindcss -i ./src/styles.css -o ./dist/styles.css --minify --watch",
+    "build:web": "NODE_ENV=production npm run build:tail && NODE_ENV=production webpack",
+    "build": "npm run build:web && node bundle-app.js ../templates/index.html",
+    "dev": "npm run build:tail:watch | node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "html-webpack-plugin": "^5.5.3",
+    "tailwindcss": "^3.3.3",
+    "webpack": "^5.88.2",
+    "webpack-cli": "^5.1.4",
+    "jquery": "^3.7.0",
+    "webpack-dev-server": "^4.15.1"
+  }
+}
