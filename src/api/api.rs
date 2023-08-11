@@ -13,8 +13,8 @@ pub struct Client {
 
 #[get("/api/clients")]
 pub async fn client_api_endpoint() -> impl Responder {
-    let clients = data::read_clients();
-    HttpResponse::Ok().body(to_string(&clients).unwrap())
+    let data = data::read_data();
+    HttpResponse::Ok().body(to_string(&data.clients).unwrap())
 }
 
 #[post("/api/clients")]
