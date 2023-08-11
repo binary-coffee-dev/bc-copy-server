@@ -7,25 +7,62 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<button id="newClient">new client</button>
-<div>
-    <table>
-        <thead>
-        <tr>
-            <th>Client</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody id="clientList">
-        <tr>
-            <td>some</td>
-            <td>
-                <button>remove</button>
-                <button>edit</button>
-            </td>
-        </tr>
-        </tbody>
-    </table>
+<dialog id="createNewClientDialog"
+        class="mt-6 backdrop:bg-gray-50 open:bg-white dark:open:bg-slate-900 open:ring-1 open:ring-black/5 dark:open:ring-white/10 open:shadow-lg p-6 rounded-lg">
+    <form method="dialog">
+        <label class="block">
+            <span class="block text-sm font-medium text-slate-700">Client name</span>
+            <input type="text" value="" id="newClientNameEle"
+                   class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400
+                      focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500
+                      invalid:border-pink-500 invalid:text-pink-600
+                      focus:invalid:border-pink-500 focus:invalid:ring-pink-500
+                "/>
+        </label>
+        <div class="basic-full mt-6 text-right">
+            <button id="cancelClientEle"
+                    onclick="window.closeCreateClientDialog()"
+                    class="bg-sky-500 hover:bg-sky-700 px-5 py-2.5 text-sm leading-5 rounded-md font-semibold text-white">
+                Cancel
+            </button>
+            <button id="newClientEle"
+                    onclick="window.newClient()"
+                    class="bg-sky-500 hover:bg-sky-700 px-5 py-2.5 text-sm leading-5 rounded-md font-semibold text-white">
+                Create
+            </button>
+        </div>
+    </form>
+</dialog>
+<div class="flex flex-column justify-items-center content-center items-center justify-center">
+    <div class="2xl-w-1/2 xl-w-2/3 sm-min-w-full md-w-full lg-w-full">
+        <div class="basic-full mt-6 text-right">
+            <button id="openNewClientEle"
+                    onclick="window.openCreateClientDialog()"
+                    class="bg-sky-500 hover:bg-sky-700 px-5 py-2.5 text-sm leading-5 rounded-md font-semibold text-white">
+                Create client
+            </button>
+        </div>
+        <table class="mt-10 border-collapse table-auto w-full text-sm">
+            <thead>
+            <tr>
+                <th class="border-b dark:border-slate-600 font-medium p-4 pl-8 pt-0 pb-3 text-slate-400 dark:text-slate-200 text-left">
+                    ID
+                </th>
+                <th class="border-b dark:border-slate-600 font-medium p-4 pl-8 pt-0 pb-3 text-slate-400 dark:text-slate-200 text-left">
+                    Client
+                </th>
+                <th class="border-b dark:border-slate-600 font-medium p-4 pl-8 pt-0 pb-3 text-slate-400 dark:text-slate-200 text-left">
+                    Key
+                </th>
+                <th class="border-b dark:border-slate-600 font-medium p-4 pl-8 pt-0 pb-3 text-slate-400 dark:text-slate-200 text-left">
+                    Actions
+                </th>
+            </tr>
+            </thead>
+            <tbody id="clientList">
+            </tbody>
+        </table>
+    </div>
 </div>
 </body>
 </html>
