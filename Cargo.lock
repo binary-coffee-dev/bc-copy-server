@@ -422,7 +422,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "copy-service"
+name = "copy_service"
 version = "0.1.0"
 dependencies = [
  "actix-cors",

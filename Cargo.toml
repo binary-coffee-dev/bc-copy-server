@@ -1,7 +1,15 @@
 [package]
-name = "copy-service"
+name = "copy_service"
 version = "0.1.0"
 edition = "2021"
+
+[[bin]]
+name = "copy_service"
+path = "src/main.rs"
+
+[lib]
+name = "cs"
+path = "src/lib.rs"
 
 [dependencies]
 actix-web = "4"
