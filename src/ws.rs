@@ -6,7 +6,10 @@ use actix_web::web::Data;
 use tungstenite::{accept, Message, WebSocket};
 
 use crate::data::DataService;
+use crate::ws::ws_message::{Directory, TreeRes};
 use ws_message::{AuthMsg, AuthRes, Message as Msg};
+
+use self::ws_message::TreeMsg;
 
 pub mod ws_message;
 
@@ -42,6 +45,33 @@ fn handle_auth_msg(
     Ok(())
 }
 
+fn handle_tree_msg(msg: TreeMsg, websocket: &mut WebSocket<TcpStream>) -> Result<(), MessageError> {
+    println!("TreeMsg: {:?}", msg);
+
+    // setting up tree
+    let tree = TreeRes {
+        root: Directory {
+            name: "root".to_string(),
+            files: None,
+            dirs: None,
+        },
+    };
+
+    websocket
+        .send(Message::Text(serde_json::to_string(&tree).unwrap()))
+        .unwrap();
+
+    Ok(())
+}
+
+fn user_is_auth(data_service: Data<Mutex<DataService>>, client_name: String) -> bool {
+    data_service
+        .lock()
+        .unwrap()
+        .connection_status
+        .contains(&client_name)
+}
+
 pub fn start_websocket_server(data_service_ins: Data<Mutex<DataService>>) {
     let server = TcpListener::bind("127.0.0.1:9001").unwrap();
     spawn(move || {
@@ -73,6 +103,16 @@ pub fn start_websocket_server(data_service_ins: Data<Mutex<DataService>>) {
                         Msg::AuthMsg(msg) => {
                             client_name = Some(msg.name.clone());
                             handle_auth_msg(msg, data_service_ins_clone.clone(), &mut websocket)
+                        }
+                        Msg::TreeMsg(msg) => {
+                            if !user_is_auth(
+                                data_service_ins_clone.clone(),
+                                client_name.clone().unwrap(),
+                            ) {
+                                Err(MessageError::AuthError())
+                            } else {
+                                handle_tree_msg(msg, &mut websocket)
+                            }
                         }
                     };
 

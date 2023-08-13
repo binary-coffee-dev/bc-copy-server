@@ -13,7 +13,7 @@ use tungstenite::{connect, Message, WebSocket};
 use cs::api::api::Client;
 use cs::data::DataService;
 use cs::ws::start_websocket_server;
-use cs::ws::ws_message::AuthRes;
+use cs::ws::ws_message::{AuthRes, TreeRes};
 
 fn get_data_path() -> String {
     String::from(format!(
@@ -101,6 +101,15 @@ fn start_socket_with_auth(
     return Some(socket);
 }
 
+fn get_client_key(client_name: String) -> String {
+    let data_service = DATA_INS.clone();
+    return data_service
+        .lock()
+        .unwrap()
+        .get_client_key(client_name.clone())
+        .unwrap();
+}
+
 #[test]
 fn ws_auth_test() {
     before_all();
@@ -114,14 +123,7 @@ fn ws_auth_test() {
     create_mock_data(vec![client_name.clone()]);
 
     // get client key
-    let key;
-    {
-        key = data_service
-            .lock()
-            .unwrap()
-            .get_client_key(client_name.clone())
-            .unwrap();
-    }
+    let key = get_client_key(client_name.clone());
 
     // start websocket server and get connected with authorization
     let mut socket = start_socket_with_auth(client_name.clone(), key.clone(), port, true).unwrap();
@@ -171,3 +173,30 @@ fn ws_auth_with_wrong_password_test() {
     .unwrap();
 }
 
+#[test]
+fn ws_get_files_tree_test() {
+    before_all();
+
+    // create dummy data for test
+    let port = 9001;
+    let client_name = "client2".to_string();
+
+    create_mock_data(vec![client_name.clone()]);
+
+    let key = get_client_key(client_name.clone());
+
+    // start websocket server and get connected with authorization
+    let mut socket = start_socket_with_auth(client_name.clone(), key, port, true).unwrap();
+
+    let get_tree_msg = String::from(format!("{{\"type\":\"TreeMsg\"}}",));
+
+    // send auth message to the server
+    socket.send(Message::Text(get_tree_msg)).unwrap();
+
+    // get response from server
+    let msg_res = socket.read().expect("Error reading message");
+    let tree_res: TreeRes = serde_json::from_str(&*msg_res.to_string()).unwrap();
+
+    // this need to change once we update the directory tree functionality
+    assert_eq!(tree_res.root.name.clone(), "root".to_string());
+}
