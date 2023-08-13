@@ -85,6 +85,16 @@ impl DataService {
         return data;
     }
 
+    pub fn get_client_key(self: &DataService, client_name: String) -> Option<String> {
+        let data = self.read_data();
+        for client in data.clients {
+            if client.name.unwrap() == client_name {
+                return Some(client.key.unwrap());
+            }
+        }
+        return None;
+    }
+
     pub fn validate_user_auth(self: &DataService, name: String, key: String) -> bool {
         let data = self.read_data();
         for client in data.clients {

@@ -43,8 +43,8 @@ fn handle_auth_msg(
 }
 
 pub fn start_websocket_server(data_service_ins: Data<Mutex<DataService>>) {
+    let server = TcpListener::bind("127.0.0.1:9001").unwrap();
     spawn(move || {
-        let server = TcpListener::bind("127.0.0.1:9001").unwrap();
         for stream in server.incoming() {
             let data_service_ins_clone = data_service_ins.clone();
             spawn(move || {
