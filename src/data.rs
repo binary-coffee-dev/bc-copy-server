@@ -1,6 +1,7 @@
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::env::current_dir;
 use std::path::Path;
 use std::{fs::metadata, fs::File, io::prelude::Write, io::BufReader};
@@ -16,9 +17,17 @@ pub struct Data {
 
 pub struct DataService {
     pub path: Option<String>,
+    pub connection_status: HashSet<String>,
 }
 
 impl DataService {
+    pub fn new(path: Option<String>) -> DataService {
+        DataService {
+            path,
+            connection_status: HashSet::new(),
+        }
+    }
+
     fn get_data_path(self: &DataService) -> String {
         if self.path.is_some() {
             return self.path.clone().unwrap();
@@ -74,6 +83,16 @@ impl DataService {
         };
 
         return data;
+    }
+
+    pub fn validate_user_auth(self: &DataService, name: String, key: String) -> bool {
+        let data = self.read_data();
+        for client in data.clients {
+            if client.name.unwrap() == name && client.key.unwrap() == key {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Migrate to db at some point */

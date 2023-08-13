@@ -12,7 +12,7 @@ pub mod data;
 pub mod ws;
 
 pub async fn run() -> std::io::Result<()> {
-    let data = DataService { path: None };
+    let data = DataService::new(None);
     let data_ins = Data::new(Mutex::new(data));
 
     start_websocket_server(Data::clone(&data_ins));

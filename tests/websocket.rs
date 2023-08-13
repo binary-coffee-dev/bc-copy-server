@@ -1,14 +1,16 @@
+use std::borrow::Cow;
 use std::env::current_dir;
 use std::fs::remove_file;
 use std::sync::Mutex;
 
 use actix_web::web::Data;
+use tungstenite::protocol::CloseFrame;
 use tungstenite::{connect, Message};
 
 use cs::api::api::Client;
 use cs::data::DataService;
 use cs::ws::start_websocket_server;
-use cs::ws::ws_message::{AuthMsg, AuthRes};
+use cs::ws::ws_message::AuthRes;
 
 fn get_data_path() -> String {
     String::from(format!(
@@ -18,9 +20,7 @@ fn get_data_path() -> String {
 }
 
 fn create_mock_data(clients: Vec<String>) -> DataService {
-    let data_service = DataService {
-        path: Some(get_data_path()),
-    };
+    let data_service = DataService::new(Some(get_data_path()));
 
     for name in clients {
         data_service.new_client(Client {
@@ -62,8 +62,12 @@ fn ws_auth_test() {
     start_websocket_server(Data::clone(&data_ins));
 
     // connect mock client to the websocket server
-    let (mut socket, _) =
-        connect(format!("ws://localhost:{}/websocket", port)).expect("Can't connect");
+    let mut socket = loop {
+        match connect(format!("ws://localhost:{}/websocket", port)) {
+            Ok((socket, _)) => break socket,
+            Err(_) => continue,
+        };
+    };
 
     // create authentication message
     let msg = String::from(format!(
@@ -80,6 +84,36 @@ fn ws_auth_test() {
 
     // validate response
     assert_eq!(auth_res.status, "accepted");
+
+    // validate if client is set as connected
+    assert!(data_ins
+        .lock()
+        .unwrap()
+        .connection_status
+        .contains(&client_name));
+
+    // close websocket connection
+    socket
+        .close(Some(CloseFrame {
+            code: tungstenite::protocol::frame::coding::CloseCode::Normal,
+            reason: Cow::from("Goodbye"),
+        }))
+        .unwrap();
+    loop {
+        if !data_ins
+            .lock()
+            .unwrap()
+            .connection_status
+            .contains(&client_name)
+        {
+            break;
+        }
+    }
+    assert!(!data_ins
+        .lock()
+        .unwrap()
+        .connection_status
+        .contains(&client_name));
 
     // remove data
     delete_mock_data();

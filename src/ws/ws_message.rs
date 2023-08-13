@@ -15,5 +15,4 @@ pub struct AuthRes {
 #[serde(tag = "type")]
 pub enum Message {
     AuthMsg(AuthMsg),
-    AuthRes(AuthRes),
 }
