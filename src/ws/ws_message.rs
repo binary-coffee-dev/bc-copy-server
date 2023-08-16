@@ -35,9 +35,28 @@ pub struct TreeRes {
 }
 // TREE MESSAGE
 
+// COPY FILE
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct CopyMsg {
+    pub id: i32,
+    pub start: i32,
+    pub end: i32,
+    pub file_key: String,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct CopyRes {
+    pub id: i32,
+    pub start: i32,
+    pub end: i32,
+    pub data: String,
+}
+// COPY FILE
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum Message {
     AuthMsg(AuthMsg),
     TreeMsg(TreeMsg),
+    CopyMsg(CopyMsg),
 }

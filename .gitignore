@@ -2,3 +2,6 @@
 
 data.json
 data-test.json
+
+data/*
+!data/.gitignore

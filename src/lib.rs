@@ -5,17 +5,20 @@ use actix_web::{web::Data, App, HttpServer};
 
 use api::views::views;
 use data::DataService;
+use file::FileService;
 use ws::start_websocket_server;
 
 pub mod api;
 pub mod data;
+pub mod file;
 pub mod ws;
 
 pub async fn run() -> std::io::Result<()> {
-    let data = DataService::new(None);
-    let data_ins = Data::new(Mutex::new(data));
+    let data_ins = Data::new(Mutex::new(DataService::new(None)));
+    let file_ins = Data::new(Mutex::new(FileService::new("./data".to_string())));
 
-    start_websocket_server(Data::clone(&data_ins));
+    // todo: get port from env
+    start_websocket_server(Data::clone(&data_ins), Data::clone(&file_ins), 9001);
 
     HttpServer::new(move || {
         let cors = Cors::default()
@@ -33,7 +36,7 @@ pub async fn run() -> std::io::Result<()> {
             .service(api::api::create_client_endpoint)
             .service(views)
     })
-    .bind(("127.0.0.1", 4000))?
+    .bind(("127.0.0.1", 4000))? // todo get port form env
     .run()
     .await
 }

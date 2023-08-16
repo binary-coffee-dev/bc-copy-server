@@ -5,6 +5,7 @@ use std::net::TcpStream;
 use std::sync::{Mutex, Once};
 
 use actix_web::web::Data;
+use cs::file::{FileService, ProvideFile};
 use lazy_static::lazy_static;
 use tungstenite::protocol::CloseFrame;
 use tungstenite::stream::MaybeTlsStream;
@@ -13,7 +14,27 @@ use tungstenite::{connect, Message, WebSocket};
 use cs::api::api::Client;
 use cs::data::DataService;
 use cs::ws::start_websocket_server;
-use cs::ws::ws_message::{AuthRes, TreeRes};
+use cs::ws::ws_message::{AuthRes, Directory, TreeRes, CopyRes};
+
+static PORT: i32 = 9001;
+
+struct FileServiceMock {}
+
+impl ProvideFile for FileServiceMock {
+    fn get_tree(&self) -> Result<cs::ws::ws_message::Directory, String> {
+        Ok(Directory {
+            name: "root".to_string(),
+            dirs: None,
+            files: None,
+        })
+    }
+    fn get_file_data(&self, start: i32, end: i32, file_key: String) -> Result<String, String> {
+        // search file given the key
+        // read data in the interval [start, end)
+        // return the data
+        Ok("data test".to_string())
+    }
+}
 
 fn get_data_path() -> String {
     String::from(format!(
@@ -37,16 +58,23 @@ static BEFORE_ALL: Once = Once::new();
 lazy_static! {
     static ref DATA_INS: Data<Mutex<DataService>> =
         Data::new(Mutex::new(DataService::new(Some(get_data_path()))));
+    // test with mock FileService
+    static ref FILE_INS: Data<Mutex<FileServiceMock>> = Data::new(Mutex::new(FileServiceMock {}));
+
+    // test with FileService
+    // static ref FILE_INS: Data<Mutex<FileService>> = Data::new(Mutex::new(FileService::new(
+    //     "/home/gonzalezext/Pictures/".to_string()
+    // )));
 }
 
 fn before_all() {
     let data_ins = DATA_INS.clone();
+    let file_ins = FILE_INS.clone();
     BEFORE_ALL.call_once(|| {
         delete_mock_data();
 
-        // todo: set port inside the websocket service too
         // start websocket connection
-        start_websocket_server(Data::clone(&data_ins));
+        start_websocket_server(Data::clone(&data_ins), Data::clone(&file_ins), PORT);
     });
 }
 
@@ -64,12 +92,11 @@ fn create_mock_data(clients: Vec<String>) {
 fn start_socket_with_auth(
     client_name: String,
     key: String,
-    port: i32,
     expected_connection_status: bool,
 ) -> Option<WebSocket<MaybeTlsStream<TcpStream>>> {
     // connect mock client to the websocket server
     let mut socket = loop {
-        match connect(format!("ws://localhost:{}/websocket", port)) {
+        match connect(format!("ws://localhost:{}/websocket", PORT)) {
             Ok((socket, _)) => break socket,
             Err(_) => continue,
         };
@@ -116,7 +143,6 @@ fn ws_auth_test() {
     let data_service = DATA_INS.clone();
 
     // create dummy data for test
-    let port = 9001;
     let client_name = "client1".to_string();
 
     // create mock clients
@@ -126,7 +152,7 @@ fn ws_auth_test() {
     let key = get_client_key(client_name.clone());
 
     // start websocket server and get connected with authorization
-    let mut socket = start_socket_with_auth(client_name.clone(), key.clone(), port, true).unwrap();
+    let mut socket = start_socket_with_auth(client_name.clone(), key.clone(), true).unwrap();
 
     // close websocket connection
     socket
@@ -158,19 +184,12 @@ fn ws_auth_with_wrong_password_test() {
     before_all();
 
     // create dummy data for test
-    let port = 9001;
     let client_name = "client2".to_string();
 
     create_mock_data(vec![client_name.clone()]);
 
     // start websocket server and get connected with authorization
-    start_socket_with_auth(
-        client_name.clone(),
-        "not_valid_key".to_string(),
-        port,
-        false,
-    )
-    .unwrap();
+    start_socket_with_auth(client_name.clone(), "not_valid_key".to_string(), false).unwrap();
 }
 
 #[test]
@@ -178,7 +197,6 @@ fn ws_get_files_tree_test() {
     before_all();
 
     // create dummy data for test
-    let port = 9001;
     let client_name = "client2".to_string();
 
     create_mock_data(vec![client_name.clone()]);
@@ -186,7 +204,7 @@ fn ws_get_files_tree_test() {
     let key = get_client_key(client_name.clone());
 
     // start websocket server and get connected with authorization
-    let mut socket = start_socket_with_auth(client_name.clone(), key, port, true).unwrap();
+    let mut socket = start_socket_with_auth(client_name.clone(), key, true).unwrap();
 
     let get_tree_msg = String::from(format!("{{\"type\":\"TreeMsg\"}}",));
 
@@ -197,6 +215,40 @@ fn ws_get_files_tree_test() {
     let msg_res = socket.read().expect("Error reading message");
     let tree_res: TreeRes = serde_json::from_str(&*msg_res.to_string()).unwrap();
 
-    // this need to change once we update the directory tree functionality
     assert_eq!(tree_res.root.name.clone(), "root".to_string());
+}
+
+#[test]
+fn ws_copy_file_test() {
+    before_all();
+
+    // create dummy data for test
+    let client_name = "client_copy_test".to_string();
+
+    create_mock_data(vec![client_name.clone()]);
+
+    let key = get_client_key(client_name.clone());
+
+    // start websocket server and get connected with authorization
+    let mut socket = start_socket_with_auth(client_name.clone(), key, true).unwrap();
+
+    // send the copy request to the server
+    let id = 23;
+    let start = 0;
+    let end = 123;
+    let get_copy_msg = String::from(format!("{{\"type\":\"CopyMsg\", \"id\": {id}, \"start\": {start}, \"end\": {end}, \"file_key\": \"adlfjouiwyhe\"}}",));
+    println!("{get_copy_msg}");
+
+    // send auth message to the server
+    socket.send(Message::Text(get_copy_msg)).unwrap();
+
+    // get response from server
+    let msg_res = socket.read().expect("Error reading message");
+    let copy_res: CopyRes = serde_json::from_str(&*msg_res.to_string()).unwrap();
+
+    // validate CopyRes information
+    assert_eq!(copy_res.data, "data test".to_string());
+    assert_eq!(copy_res.id, id);
+    assert_eq!(copy_res.start, start);
+    assert_eq!(copy_res.end, end);
 }
