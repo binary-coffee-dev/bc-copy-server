@@ -6,16 +6,17 @@ use actix_web::web::Data;
 use tungstenite::{accept, Message, WebSocket};
 
 use crate::data::DataService;
-use crate::file::{FileService, ProvideFile};
+use crate::file::ProvideFile;
 use crate::ws::ws_message::{CopyRes, TreeRes};
 use ws_message::{AuthMsg, AuthRes, Message as Msg};
 
-use self::ws_message::{CopyMsg, TreeMsg};
+use self::ws_message::{CopyMsg, ErrRes, TreeMsg};
 
 pub mod ws_message;
 
 enum MessageError {
     AuthError(),
+    ReadFileError(String),
 }
 
 fn handle_auth_msg(
@@ -30,10 +31,12 @@ fn handle_auth_msg(
     let res: AuthRes;
     if accept {
         res = AuthRes {
+            id: msg.id,
             status: "accepted".to_string(),
         };
     } else {
         res = AuthRes {
+            id: msg.id,
             status: "denied".to_string(),
         };
     }
@@ -55,6 +58,7 @@ fn handle_tree_msg<T: ProvideFile>(
 
     // setting up tree
     let tree = TreeRes {
+        id: msg.id,
         root: file_service.lock().unwrap().get_tree().unwrap(),
     };
 
@@ -70,13 +74,17 @@ fn handle_copy_msg<T: ProvideFile>(
     file_service: Data<Mutex<T>>,
     websocket: &mut WebSocket<TcpStream>,
 ) -> Result<(), MessageError> {
-    println!("TreeMsg: {:?}", msg);
+    println!("CopyMsg: {:?}", msg);
 
     let copy_res = CopyRes {
         id: msg.id,
         start: msg.start,
         end: msg.end,
-        data: file_service.lock().unwrap().get_file_data(msg.start, msg.end, msg.file_key).unwrap(),
+        data: file_service
+            .lock()
+            .unwrap()
+            .get_file_data(msg.start, msg.end, msg.file_hash)
+            .unwrap(),
     };
 
     websocket
@@ -110,10 +118,7 @@ pub fn start_websocket_server<T: ProvideFile + Sync + Send + 'static>(
                 loop {
                     let msg = websocket.read().unwrap();
 
-                    println!("--- {}", msg.to_string());
-
                     if msg.is_close() {
-                        println!("++++++ {:?}", client_name.clone());
                         if client_name.is_some() {
                             data_service_ins_clone
                                 .lock()
@@ -126,12 +131,16 @@ pub fn start_websocket_server<T: ProvideFile + Sync + Send + 'static>(
 
                     // handle message
                     let msg_ins: Msg = serde_json::from_str(&*msg.to_string()).expect("some error");
+                    println!("sssssssss");
+                    let id;
                     let msg_result = match msg_ins {
                         Msg::AuthMsg(msg) => {
+                            id = msg.id;
                             client_name = Some(msg.name.clone());
                             handle_auth_msg(msg, data_service_ins_clone.clone(), &mut websocket)
                         }
                         Msg::TreeMsg(msg) => {
+                            id = msg.id;
                             if !user_is_auth(
                                 data_service_ins_clone.clone(),
                                 client_name.clone().unwrap(),
@@ -142,13 +151,29 @@ pub fn start_websocket_server<T: ProvideFile + Sync + Send + 'static>(
                             }
                         }
                         Msg::CopyMsg(msg) => {
+                            id = msg.id;
                             if !user_is_auth(
                                 data_service_ins_clone.clone(),
                                 client_name.clone().unwrap(),
                             ) {
                                 Err(MessageError::AuthError())
                             } else {
-                                handle_copy_msg(msg, file_service_ins_clone.clone(), &mut websocket)
+                                let handle_result = handle_copy_msg(
+                                    msg.clone(),
+                                    file_service_ins_clone.clone(),
+                                    &mut websocket,
+                                );
+                                if handle_result.is_ok() {
+                                    Ok(())
+                                } else {
+                                    Err(MessageError::ReadFileError(
+                                        format!(
+                                            "Problems to find the file with hash: {}",
+                                            msg.file_hash.clone()
+                                        )
+                                        .to_string(),
+                                    ))
+                                }
                             }
                         }
                     };
@@ -166,6 +191,15 @@ pub fn start_websocket_server<T: ProvideFile + Sync + Send + 'static>(
                             match error_type {
                                 MessageError::AuthError() => {
                                     // todo: close connection with websocket
+                                }
+                                MessageError::ReadFileError(err) => {
+                                    println!("Error: {}", err);
+                                    let err_res = ErrRes { err, id };
+                                    websocket
+                                        .send(Message::Text(
+                                            serde_json::to_string(&err_res).unwrap(),
+                                        ))
+                                        .unwrap();
                                 }
                             }
                             break;
