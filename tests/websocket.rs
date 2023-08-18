@@ -1,13 +1,16 @@
 use std::borrow::Cow;
 use std::env::current_dir;
-use std::fs::{metadata, remove_file};
+use std::fs::{create_dir, metadata, remove_dir_all, remove_file, File};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::{Mutex, Once};
-use std::time::{UNIX_EPOCH, SystemTime};
 
 use actix_web::web::Data;
-use cs::file::ProvideFile;
+use base64::{engine::general_purpose, Engine as _};
+use cs::file::{ProvideFile, ReadedData};
 use lazy_static::lazy_static;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use tungstenite::protocol::CloseFrame;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
@@ -30,16 +33,26 @@ impl ProvideFile for FileServiceMock {
             files: None,
         })
     }
-    fn get_file_data(&self, _start: u64, _end: u64, _file_key: String) -> Result<String, String> {
-        Ok("data test".to_string())
+    fn get_file_data(
+        &self,
+        _start: u64,
+        _end: u64,
+        _file_key: String,
+    ) -> Result<ReadedData, String> {
+        Ok(ReadedData {
+            data: "data test".to_string(),
+            end: 10,
+            last_data: true,
+        })
     }
 }
 
+fn current_dir_path() -> String {
+    current_dir().unwrap().display().to_string()
+}
+
 fn get_data_path() -> String {
-    String::from(format!(
-        "{}/data-test.json",
-        current_dir().unwrap().display().to_string()
-    ))
+    String::from(format!("{}/data-test.json", current_dir_path()))
 }
 
 fn delete_mock_data() {
@@ -52,6 +65,27 @@ fn delete_mock_data() {
     }
 }
 
+fn create_dir_f(dir_path: String) {
+    let path_res = format!("{}/{}", current_dir_path(), dir_path).to_string();
+    create_dir(path_res).unwrap();
+}
+
+fn create_file_f(file_path: String) {
+    let path_res = format!("{}/{}", current_dir_path(), file_path).to_string();
+    let mut file = File::create(path_res).unwrap();
+    let rand_string: String = thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(500000)
+        .map(char::from)
+        .collect();
+    file.write_all(rand_string.as_bytes()).unwrap();
+}
+
+fn remove_dir_rec(path: String) {
+    let path_res = format!("{}/{}", current_dir_path(), path).to_string();
+    if remove_dir_all(path_res).is_ok() {}
+}
+
 static BEFORE_ALL: Once = Once::new();
 
 lazy_static! {
@@ -62,7 +96,7 @@ lazy_static! {
 
     // test with FileService
     static ref FILE_INS: Data<Mutex<cs::file::FileService>> = Data::new(Mutex::new(cs::file::FileService::new(
-        "/home/gonzalezext/Pictures/".to_string()
+        format!("{}/{}", current_dir_path(), "data-test")
     )));
 }
 
@@ -74,6 +108,21 @@ fn before_all() {
 
         // start websocket connection
         start_websocket_server(Data::clone(&data_ins), Data::clone(&file_ins), PORT);
+
+        // testing files
+        let data_test_path = "data-test".to_string();
+        remove_dir_rec(data_test_path.clone());
+
+        create_dir_f(data_test_path.clone());
+        create_file_f(format!("{}/{}", data_test_path.clone(), "A.txt".to_string()).to_string());
+        create_file_f(format!("{}/{}", data_test_path.clone(), "B.txt".to_string()).to_string());
+        create_file_f(format!("{}/{}", data_test_path.clone(), "C.txt".to_string()).to_string());
+
+        let dir1_path = format!("{}/{}", data_test_path, "dir1").to_string();
+        create_dir_f(dir1_path.clone());
+        create_file_f(format!("{}/{}", dir1_path.clone(), "A.txt".to_string()).to_string());
+        create_file_f(format!("{}/{}", dir1_path.clone(), "B.txt".to_string()).to_string());
+        create_file_f(format!("{}/{}", dir1_path.clone(), "C.txt".to_string()).to_string());
     });
 }
 
@@ -89,7 +138,7 @@ fn create_mock_data(clients: Vec<String>) {
 }
 
 fn gen_msg_id() -> i32 {
-    i32::try_from(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()).unwrap()
+    rand::thread_rng().gen_range(0..10000000)
 }
 
 fn start_socket_with_auth(
@@ -198,6 +247,19 @@ fn ws_auth_with_wrong_password_test() {
     start_socket_with_auth(client_name.clone(), "not_valid_key".to_string(), false).unwrap();
 }
 
+fn get_tree(socket: &mut WebSocket<MaybeTlsStream<TcpStream>>, id: i32) -> TreeRes {
+    let get_tree_msg = String::from(format!("{{\"id\": {},\"type\":\"TreeMsg\"}}", id));
+
+    // send auth message to the server
+    socket.send(Message::Text(get_tree_msg)).unwrap();
+
+    // get response from server
+    let msg_res = socket.read().expect("Error reading message");
+    let tree_res: TreeRes = serde_json::from_str(&*msg_res.to_string()).unwrap();
+
+    return tree_res;
+}
+
 #[test]
 fn ws_get_files_tree_test() {
     before_all();
@@ -213,20 +275,11 @@ fn ws_get_files_tree_test() {
     let mut socket = start_socket_with_auth(client_name.clone(), key, true).unwrap();
 
     let id: i32 = gen_msg_id();
-    let get_tree_msg = String::from(format!("{{\"id\": {},\"type\":\"TreeMsg\"}}", id));
-
-    // send auth message to the server
-    socket.send(Message::Text(get_tree_msg)).unwrap();
-
-    // get response from server
-    let msg_res = socket.read().expect("Error reading message");
-    let tree_res: TreeRes = serde_json::from_str(&*msg_res.to_string()).unwrap();
-
-    print!("{msg_res}");
+    let tree_res = get_tree(&mut socket, id);
+    // print!("{msg_res}");
 
     assert_eq!(tree_res.id, id);
     assert_eq!(tree_res.root.name.clone(), "root".to_string());
-    assert!(false);
 }
 
 // #[ignore = "temporaly"]
@@ -244,27 +297,60 @@ fn ws_copy_file_test() {
     // start websocket server and get connected with authorization
     let mut socket = start_socket_with_auth(client_name.clone(), key, true).unwrap();
 
-    // send the copy request to the server
+    // request tree from server
     let id: i32 = gen_msg_id();
-    let start = 0;
-    let end = 123;
-    let file_hash = "9a789e7939e211df6a00022c9d5f4c1f387d8596caf51d8fbaa76c9d96ceb05c".to_string();
-    let copy_msg = String::from(format!("{{\"type\":\"CopyMsg\", \"id\": {id}, \"start\": {start}, \"end\": {end}, \"file_hash\": \"{file_hash}\"}}",));
-    println!("{copy_msg}");
+    let tree_res = get_tree(&mut socket, id);
 
-    // send auth message to the server
-    socket.send(Message::Text(copy_msg)).unwrap();
+    let file_name = tree_res.root.files.unwrap().get(0).unwrap().clone();
+    let file_path = format!(
+        "{}/{}/{}",
+        current_dir_path(),
+        "data-test",
+        file_name.name.clone()
+    );
+    let file = File::open(file_path.clone()).unwrap();
+    let read_size = 300000;
+    let mut reader = BufReader::with_capacity(read_size, file);
 
-    // get response from server
-    let msg_res = socket.read().expect("Error reading message");
-    let copy_res: CopyRes = serde_json::from_str(&*msg_res.to_string()).unwrap();
+    let mut start = 0;
 
-    println!("{:?}", copy_res);
+    loop {
+        let buffer = reader.fill_buf().unwrap();
+        let readed_size = buffer.len();
+        if readed_size == 0 {
+            break;
+        }
 
-    // validate CopyRes information
-    assert_eq!(copy_res.id, id);
-    assert_eq!(copy_res.data, "data test".to_string());
-    assert_eq!(copy_res.id, id);
-    assert_eq!(copy_res.start, start);
-    assert_eq!(copy_res.end, end);
+        // send the copy request to the server
+        let id: i32 = gen_msg_id();
+        let end = start + read_size;
+        let file_hash = file_name.hash.clone();
+
+        let copy_msg = String::from(format!("{{\"type\":\"CopyMsg\", \"id\": {id}, \"start\": {start}, \"end\": {end}, \"file_hash\": \"{file_hash}\"}}",));
+        println!("{copy_msg}");
+
+        // send auth message to the server
+        socket.send(Message::Text(copy_msg)).unwrap();
+
+        // get response from server
+        let msg_res = socket.read().expect("Error reading message");
+        let copy_res: CopyRes = serde_json::from_str(&*msg_res.to_string()).unwrap();
+
+        println!("{:?}", copy_res);
+
+        // validate CopyRes information
+        assert_eq!(copy_res.id, id);
+        assert_eq!(copy_res.start, u64::try_from(start).unwrap());
+        assert_eq!(copy_res.end, u64::try_from(start + readed_size).unwrap());
+
+        // validate data
+        let data_bytes = general_purpose::STANDARD.decode(copy_res.data).unwrap();
+        for i in [0..data_bytes.len()] {
+            assert_eq!(data_bytes[i.clone()], buffer[i]);
+        }
+
+        // free buffer reader
+        start += readed_size;
+        reader.consume(readed_size);
+    }
 }

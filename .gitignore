@@ -5,3 +5,5 @@ data-test.json
 
 data/*
 !data/.gitignore
+
+data-test

@@ -76,15 +76,18 @@ fn handle_copy_msg<T: ProvideFile>(
 ) -> Result<(), MessageError> {
     println!("CopyMsg: {:?}", msg);
 
-    let copy_res = CopyRes {
-        id: msg.id,
-        start: msg.start,
-        end: msg.end,
-        data: file_service
+    let data_res = file_service
             .lock()
             .unwrap()
             .get_file_data(msg.start, msg.end, msg.file_hash)
-            .unwrap(),
+            .unwrap();
+
+    let copy_res = CopyRes {
+        id: msg.id,
+        start: msg.start,
+        end: data_res.end,
+        data: data_res.data,
+        last_data: data_res.last_data
     };
 
     websocket

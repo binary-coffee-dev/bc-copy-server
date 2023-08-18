@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::fs::File as Fl;
 use std::os::unix::prelude::FileExt;
 use std::path::Path;
@@ -7,20 +8,26 @@ use std::time::{Duration, Instant};
 use std::{collections::HashMap, fs::read_dir};
 
 use crate::ws::ws_message::{Directory, File};
-use base64::{
-    engine::{self, general_purpose},
-    Engine as _,
-};
+use base64::{engine::general_purpose, Engine as _};
+use serde::{Deserialize, Serialize};
 use sha256::try_digest;
 
 struct PathCash {
     time: Instant,
     path: String,
+    size: u64,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct ReadedData {
+    pub data: String,
+    pub end: u64,
+    pub last_data: bool,
 }
 
 pub trait ProvideFile {
     fn get_tree(&self) -> Result<Directory, String>;
-    fn get_file_data(&self, start: u64, end: u64, file_key: String) -> Result<String, String>;
+    fn get_file_data(&self, start: u64, end: u64, file_key: String) -> Result<ReadedData, String>;
 }
 
 pub struct FileService {
@@ -77,7 +84,8 @@ impl FileService {
                 let new_file = File {
                     name: new_path.file_name().unwrap().to_str().unwrap().to_string(),
                     path: Some(new_path.to_str().unwrap().to_string()),
-                    hash: try_digest(new_path).unwrap(),
+                    hash: try_digest(new_path.clone()).unwrap(),
+                    size: new_path.metadata().unwrap().len(),
                 };
 
                 let mut files = dir.files.clone().unwrap();
@@ -102,7 +110,8 @@ impl FileService {
                     let new_file = File {
                         name: new_path.file_name().unwrap().to_str().unwrap().to_string(),
                         path: Some(new_path.to_str().unwrap().to_string()),
-                        hash: try_digest(new_path).unwrap(),
+                        hash: try_digest(new_path.clone()).unwrap(),
+                        size: new_path.metadata().unwrap().len(),
                     };
                     res.push(new_file);
                 }
@@ -111,15 +120,26 @@ impl FileService {
         return res;
     }
 
-    fn read_data(self: &FileService, path: String, start: u64, end: u64) -> String {
+    fn read_data(
+        self: &FileService,
+        path: String,
+        file_len: u64,
+        start: u64,
+        end: u64,
+    ) -> ReadedData {
         let file = Fl::open(path).unwrap();
+
+        let end = min(file_len, end);
         let mut vec: Vec<u8> = vec![0; usize::try_from(end - start).unwrap()];
 
-        let bytes_readed = file.read_at(&mut vec, start).unwrap();
+        file.read_at(&mut vec, start).unwrap();
 
-        println!("aa {bytes_readed}");
-
-        return general_purpose::STANDARD.encode(vec);
+        // todo: last_data and len
+        return ReadedData {
+            data: general_purpose::STANDARD.encode(vec),
+            end,
+            last_data: end >= file_len,
+        };
     }
 }
 
@@ -136,23 +156,27 @@ impl ProvideFile for FileService {
         Ok(root_dir)
     }
 
-    fn get_file_data(&self, start: u64, end: u64, file_key: String) -> Result<String, String> {
+    fn get_file_data(&self, start: u64, end: u64, file_key: String) -> Result<ReadedData, String> {
         // search file given the key
         let mut file: Option<String> = None;
+        let mut file_len: Option<u64> = None;
         let mut hash_map = self.files_hash.lock().unwrap();
         if hash_map.contains_key(&file_key) {
             file = Some(hash_map.get(&file_key).unwrap().path.clone());
+            file_len = Some(hash_map.get(&file_key).unwrap().size);
             hash_map.remove(&file_key);
         } else {
             let files = self.get_file_list(Path::new(&self.root_path));
             for f in files {
                 if f.hash == file_key {
                     file = Some(f.path.clone().unwrap());
+                    file_len = Some(f.size);
                     hash_map.insert(
                         f.hash,
                         PathCash {
                             time: Instant::now(),
                             path: f.path.clone().unwrap(),
+                            size: f.size,
                         },
                     );
                 }
@@ -164,7 +188,7 @@ impl ProvideFile for FileService {
         }
 
         // read data in, Read the interval [start, end)
-        let data = self.read_data(file.unwrap(), start, end);
+        let data = self.read_data(file.unwrap(), file_len.unwrap(), start, end);
 
         // return the data
         Ok(data)

@@ -27,6 +27,7 @@ pub struct File {
     #[serde(skip_serializing)]
     pub path: Option<String>,
     pub hash: String,
+    pub size: u64,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
