@@ -7,3 +7,6 @@ data/*
 !data/.gitignore
 
 data-test
+
+.env
+.idea

@@ -18,7 +18,7 @@ pub async fn run() -> std::io::Result<()> {
     let file_ins = Data::new(Mutex::new(FileService::new("./data".to_string())));
 
     // todo: get port from env
-    start_websocket_server(Data::clone(&data_ins), Data::clone(&file_ins), 9001);
+    // start_websocket_server(Data::clone(&data_ins), Data::clone(&file_ins), 9001);
 
     HttpServer::new(move || {
         let cors = Cors::default()
