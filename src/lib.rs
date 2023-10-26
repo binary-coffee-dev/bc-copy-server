@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use std::env;
 
 use actix_cors::Cors;
 use actix_web::{web::Data, App, HttpServer};
@@ -15,11 +16,13 @@ pub mod ws;
 
 pub async fn run() -> std::io::Result<()> {
     let data_ins = Data::new(Mutex::new(DataService::new(None)));
-    let file_ins = Data::new(Mutex::new(FileService::new("./data".to_string())));
+    let data_path: String = env::var("DATA_PATH").unwrap_or("./data".to_string());
+    let file_ins = Data::new(Mutex::new(FileService::new(data_path)));
 
-    // todo: get port from env
-    // start_websocket_server(Data::clone(&data_ins), Data::clone(&file_ins), 9001);
+    let websocket_port: String = env::var("WS_PORT").unwrap_or("4001".to_string());
+    start_websocket_server(Data::clone(&data_ins), Data::clone(&file_ins), websocket_port.parse().unwrap());
 
+    let webserver_port: String = env::var("WEB_PORT").unwrap_or("4000".to_string());
     HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
@@ -36,7 +39,7 @@ pub async fn run() -> std::io::Result<()> {
             .service(api::api::create_client_endpoint)
             .service(views)
     })
-    .bind(("127.0.0.1", 4000))? // todo get port form env
+    .bind(("0.0.0.0", webserver_port.parse::<u16>().unwrap()))?
     .run()
     .await
 }

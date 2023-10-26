@@ -110,7 +110,7 @@ pub fn start_websocket_server<T: ProvideFile + Sync + Send + 'static>(
     file_service_ins: Data<Mutex<T>>,
     port: i32,
 ) {
-    let server = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
+    let server = TcpListener::bind(format!("0.0.0.0:{}", port)).unwrap();
     spawn(move || {
         for stream in server.incoming() {
             let data_service_ins_clone = data_service_ins.clone();
@@ -134,7 +134,7 @@ pub fn start_websocket_server<T: ProvideFile + Sync + Send + 'static>(
 
                     // handle message
                     let msg_ins: Msg = serde_json::from_str(&*msg.to_string()).expect("some error");
-                    println!("sssssssss");
+
                     let id;
                     let msg_result = match msg_ins {
                         Msg::AuthMsg(msg) => {

@@ -2,7 +2,7 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::env::current_dir;
+use std::env::{self, current_dir};
 use std::path::Path;
 use std::{fs::metadata, fs::File, io::prelude::Write, io::BufReader};
 
@@ -32,14 +32,11 @@ impl DataService {
         if self.path.is_some() {
             return self.path.clone().unwrap();
         }
-        // todo: take this path from the application args
-        return String::from(format!(
-            "{}/data.json",
-            current_dir().unwrap().display().to_string()
-        ));
+        let config_path: String = env::var("CONFIG_PATH").unwrap_or(current_dir().unwrap().display().to_string());
+        return String::from(format!("{}/data.json", config_path));
     }
 
-    /** Migrate to db at some point*/
+    /** Migrate to sqlite db at some point*/
     pub fn read_data(self: &DataService) -> Data {
         let clients: Vec<Client> = Vec::new();
         let mut data = Data {
