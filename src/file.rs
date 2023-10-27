@@ -1,11 +1,15 @@
 use std::cmp::min;
 use std::fs::File as Fl;
-use std::os::unix::prelude::FileExt;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::{sleep, spawn};
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, fs::read_dir};
+
+#[cfg(target_family = "unix")]
+use std::os::unix::prelude::FileExt;
+#[cfg(target_family = "windows")]
+use std::os::windows::prelude::FileExt;
 
 use crate::ws::ws_message::{Directory, File};
 use base64::{engine::general_purpose, Engine as _};
