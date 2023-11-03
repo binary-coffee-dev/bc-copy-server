@@ -15,7 +15,7 @@ COPY src ./src
 COPY templates ./templates
 RUN cargo build --release
 
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 
 WORKDIR /
 RUN mkdir data config
