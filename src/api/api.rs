@@ -12,7 +12,7 @@ use crate::data::DataService;
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct Client {
-    pub id: Option<i32>,
+    pub id: Option<i64>,
     pub name: Option<String>,
     pub key: Option<String>,
 }
@@ -20,8 +20,8 @@ pub struct Client {
 #[get("/api/clients")]
 pub async fn client_api_endpoint(data_service_ins: Data<Mutex<DataService>>) -> impl Responder {
     let data_service = data_service_ins.lock().unwrap();
-    let data = data_service.read_data();
-    HttpResponse::Ok().body(to_string(&data.clients).unwrap())
+    let clients = data_service.get_clients();
+    HttpResponse::Ok().body(to_string(&clients).unwrap())
 }
 
 #[post("/api/clients")]
@@ -37,7 +37,7 @@ pub async fn create_client_endpoint(
 #[get("/api/clients/{id}")]
 pub async fn get_client_endpoint(
     data_service_ins: Data<Mutex<DataService>>,
-    id: web::Path<(i32,)>,
+    id: web::Path<(i64,)>,
 ) -> impl Responder {
     let data_service = data_service_ins.lock().unwrap();
     let res = data_service.get_client(id.into_inner().0);
@@ -48,7 +48,7 @@ pub async fn get_client_endpoint(
 pub async fn update_client_endpoint(
     data_service_ins: Data<Mutex<DataService>>,
     client: web::Form<Client>,
-    id: web::Path<(i32,)>,
+    id: web::Path<(i64,)>,
 ) -> impl Responder {
     let data_service = data_service_ins.lock().unwrap();
     let mut client_ins = client.into_inner();
@@ -60,7 +60,7 @@ pub async fn update_client_endpoint(
 #[post("/api/clients/{id}/generate_key")]
 pub async fn generate_client_key_endpoint(
     data_service_ins: Data<Mutex<DataService>>,
-    id: web::Path<(i32,)>,
+    id: web::Path<(i64,)>,
 ) -> impl Responder {
     let data_service = data_service_ins.lock().unwrap();
     let res = data_service.gen_key(id.into_inner().0);
@@ -70,7 +70,7 @@ pub async fn generate_client_key_endpoint(
 #[delete("/api/clients/{id}")]
 pub async fn delete_client_endpoint(
     data_service_ins: Data<Mutex<DataService>>,
-    id: web::Path<(i32,)>,
+    id: web::Path<(i64,)>,
 ) -> impl Responder {
     let data_service = data_service_ins.lock().unwrap();
     let removed = data_service.remove_client(id.into_inner().0);

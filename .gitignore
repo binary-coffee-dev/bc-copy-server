@@ -2,6 +2,7 @@
 
 data.json
 data-test.json
+data.db
 
 data/*
 !data/.gitignore

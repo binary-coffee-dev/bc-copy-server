@@ -77,17 +77,17 @@ fn handle_copy_msg<T: ProvideFile>(
     println!("CopyMsg: {:?}", msg);
 
     let data_res = file_service
-            .lock()
-            .unwrap()
-            .get_file_data(msg.start, msg.end, msg.file_hash)
-            .unwrap();
+        .lock()
+        .unwrap()
+        .get_file_data(msg.start, msg.end, msg.file_hash)
+        .unwrap();
 
     let copy_res = CopyRes {
         id: msg.id,
         start: msg.start,
         end: data_res.end,
         data: data_res.data,
-        last_data: data_res.last_data
+        last_data: data_res.last_data,
     };
 
     websocket
@@ -111,6 +111,8 @@ pub fn start_websocket_server<T: ProvideFile + Sync + Send + 'static>(
     port: i32,
 ) {
     let server = TcpListener::bind(format!("0.0.0.0:{}", port)).unwrap();
+    println!("WebSocket running in port: {}", port);
+
     spawn(move || {
         for stream in server.incoming() {
             let data_service_ins_clone = data_service_ins.clone();
@@ -174,7 +176,7 @@ pub fn start_websocket_server<T: ProvideFile + Sync + Send + 'static>(
                                             "Problems to find the file with hash: {}",
                                             msg.file_hash.clone()
                                         )
-                                        .to_string(),
+                                            .to_string(),
                                     ))
                                 }
                             }

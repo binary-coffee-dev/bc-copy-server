@@ -15,7 +15,7 @@ pub mod file;
 pub mod ws;
 
 pub async fn run() -> std::io::Result<()> {
-    let data_ins = Data::new(Mutex::new(DataService::new(None)));
+    let data_ins = Data::new(Mutex::new(DataService::new()));
     let data_path: String = env::var("DATA_PATH").unwrap_or("./data".to_string());
     let file_ins = Data::new(Mutex::new(FileService::new(data_path)));
 
@@ -23,6 +23,7 @@ pub async fn run() -> std::io::Result<()> {
     start_websocket_server(Data::clone(&data_ins), Data::clone(&file_ins), websocket_port.parse().unwrap());
 
     let webserver_port: String = env::var("WEB_PORT").unwrap_or("4000".to_string());
+    println!("WebServer running in port: {}", webserver_port);
     HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()

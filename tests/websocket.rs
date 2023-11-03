@@ -90,7 +90,7 @@ static BEFORE_ALL: Once = Once::new();
 
 lazy_static! {
     static ref DATA_INS: Data<Mutex<DataService>> =
-        Data::new(Mutex::new(DataService::new(Some(get_data_path()))));
+        Data::new(Mutex::new(DataService::new()));
     // test with mock FileService
     // static ref FILE_INS: Data<Mutex<FileServiceMock>> = Data::new(Mutex::new(FileServiceMock {}));
 
