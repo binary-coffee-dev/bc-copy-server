@@ -8,6 +8,7 @@ WORKDIR /build_dir
 
 # coping and installing the dependencies
 COPY Cargo.toml Cargo.lock ./
+COPY test_utils ./test_utils
 RUN cargo fetch
 
 # coping and build base code
