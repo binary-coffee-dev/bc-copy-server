@@ -458,6 +458,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha256",
+ "test_utils",
  "tungstenite",
 ]
 
@@ -1236,6 +1237,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "test_utils"
+version = "0.1.0"
+dependencies = [
+ "rand",
 ]
 
 [[package]]

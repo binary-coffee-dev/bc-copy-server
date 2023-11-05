@@ -1,7 +1,6 @@
 /target
 
-data.json
-data-test.json
+data_test.db
 data.db
 
 data/*

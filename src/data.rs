@@ -28,7 +28,11 @@ impl DataService {
     pub fn new() -> DataService {
         let config_path: String = env::var("CONFIG_PATH")
             .unwrap_or(current_dir().unwrap().display().to_string());
-        let config_file = String::from(format!("{}/data.db", config_path));
+        let db_file_name: String = env::var("DB_FILE_NAME")
+            .unwrap_or("data.db".to_string());
+        println!("{}", db_file_name);
+        let config_file = String::from(format!("{}/{}", config_path, db_file_name));
+        println!("{}", config_file);
 
         let db_connection = Connection::open(config_file).unwrap();
         DataService::initialize_db(&db_connection);
@@ -89,6 +93,58 @@ impl DataService {
         return self.get_client_from_query(&mut stmt, params![]);
     }
 
+    pub fn validate_user_auth(self: &DataService, name: String, key: String) -> bool {
+        let db_connection = self.db_connection.lock().unwrap();
+        let mut stmt = db_connection.prepare(
+            "SELECT * FROM client AS c WHERE c.name = ?1 AND c.key = ?2;",
+        ).unwrap();
+
+        let v = self.get_client_from_query(&mut stmt, params![name, key]);
+        return !v.is_empty();
+    }
+
+    pub fn remove_client(self: &DataService, id: i64) -> Client {
+        let client_removed = self.get_client(id);
+
+        let db_connection = self.db_connection.lock();
+
+        db_connection.unwrap().execute(
+            "DELETE FROM client AS c WHERE c.id = ?1;",
+            [id],
+        ).unwrap();
+
+        return client_removed;
+    }
+
+    pub fn new_client(self: &DataService, client: Client) -> Client {
+        let new_client_id: i64;
+
+        let existing = self.get_client_by_name(client.name.clone().unwrap());
+        if existing.is_none() {
+            let db_connection = self.db_connection.lock().unwrap();
+
+            db_connection.execute(
+                "INSERT INTO client (name, key) VALUES (?1, ?2);",
+                [client.name.unwrap(), "".to_string()],
+            ).unwrap();
+            new_client_id = db_connection.last_insert_rowid();
+        } else {
+            return existing.unwrap();
+        }
+
+        return self.gen_key(new_client_id);
+    }
+
+    pub fn get_client_by_name(self: &DataService, client_name: String) -> Option<Client> {
+        let db_connection = self.db_connection.lock().unwrap();
+        let mut stmt = db_connection.prepare(
+            "SELECT * FROM client AS c WHERE c.name = ?1;",
+        ).unwrap();
+
+        let v: Vec<Client> = self.get_client_from_query(&mut stmt, params![client_name]);
+        return if v.is_empty() { None } else { Some(v[0].clone()) };
+    }
+
     pub fn get_client_key(self: &DataService, client_name: String) -> Option<String> {
         let db_connection = self.db_connection.lock().unwrap();
         let mut stmt = db_connection.prepare(
@@ -101,43 +157,6 @@ impl DataService {
         } else {
             return Some(v[0].key.clone().unwrap());
         }
-    }
-
-    pub fn validate_user_auth(self: &DataService, name: String, key: String) -> bool {
-        let db_connection = self.db_connection.lock().unwrap();
-        let mut stmt = db_connection.prepare(
-            "SELECT * FROM client AS c WHERE c.name = ?1 AND c.key = ?2;",
-        ).unwrap();
-
-        let v = self.get_client_from_query(&mut stmt, params![name, key]);
-        return !v.is_empty();
-    }
-
-    pub fn remove_client(self: &DataService, id: i64) -> Client {
-        let db_connection = self.db_connection.lock();
-        let client_removed = self.get_client(id);
-
-        db_connection.unwrap().execute(
-            "DELETE FROM client AS c WHERE c.id = id;",
-            [id],
-        ).unwrap();
-
-        return client_removed;
-    }
-
-    pub fn new_client(self: &DataService, client: Client) -> Client {
-        let new_client_id: i64;
-
-        {
-            let db_connection = self.db_connection.lock().unwrap();
-            db_connection.execute(
-                "INSERT INTO client (name, key) VALUES (?1, ?2);",
-                [client.name.unwrap(), "".to_string()],
-            ).unwrap();
-            new_client_id = db_connection.last_insert_rowid();
-        }
-
-        return self.gen_key(new_client_id);
     }
 
     pub fn gen_key(self: &DataService, id: i64) -> Client {

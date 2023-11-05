@@ -1,16 +1,15 @@
+extern crate test_utils;
+
 use std::borrow::Cow;
-use std::env::current_dir;
-use std::fs::{create_dir, metadata, remove_dir_all, remove_file, File};
-use std::io::{BufRead, BufReader, Write};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
+use std::string::ToString;
 use std::sync::{Mutex, Once};
 
 use actix_web::web::Data;
 use base64::{engine::general_purpose, Engine as _};
-use cs::file::{ProvideFile, ReadedData};
 use lazy_static::lazy_static;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use tungstenite::protocol::CloseFrame;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
@@ -18,81 +17,16 @@ use tungstenite::{connect, Message, WebSocket};
 use cs::api::api::Client;
 use cs::data::DataService;
 use cs::ws::start_websocket_server;
-use cs::ws::ws_message::{AuthRes, CopyRes, Directory, TreeRes};
+use cs::ws::ws_message::{AuthRes, CopyRes, TreeRes};
+use test_utils::{current_dir_path, gen_msg_id, setting_up_test_file_tree};
 
 static PORT: i32 = 9004;
 
-struct FileServiceMock {}
-
-impl ProvideFile for FileServiceMock {
-    fn get_tree(&self) -> Result<cs::ws::ws_message::Directory, String> {
-        Ok(Directory {
-            name: "root".to_string(),
-            path: Some("".to_string()),
-            dirs: None,
-            files: None,
-        })
-    }
-    fn get_file_data(
-        &self,
-        _start: u64,
-        _end: u64,
-        _file_key: String,
-    ) -> Result<ReadedData, String> {
-        Ok(ReadedData {
-            data: "data test".to_string(),
-            end: 10,
-            last_data: true,
-        })
-    }
-}
-
-fn current_dir_path() -> String {
-    current_dir().unwrap().display().to_string()
-}
-
-fn get_data_path() -> String {
-    String::from(format!("{}/data-test.json", current_dir_path()))
-}
-
-fn delete_mock_data() {
-    let path = get_data_path();
-    match metadata(path.clone()) {
-        Ok(_) => {
-            remove_file(path).unwrap();
-        }
-        Err(_) => {}
-    }
-}
-
-fn create_dir_f(dir_path: String) {
-    let path_res = format!("{}/{}", current_dir_path(), dir_path).to_string();
-    create_dir(path_res).unwrap();
-}
-
-fn create_file_f(file_path: String) {
-    let path_res = format!("{}/{}", current_dir_path(), file_path).to_string();
-    let mut file = File::create(path_res).unwrap();
-    let rand_string: String = thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(500000)
-        .map(char::from)
-        .collect();
-    file.write_all(rand_string.as_bytes()).unwrap();
-}
-
-fn remove_dir_rec(path: String) {
-    let path_res = format!("{}/{}", current_dir_path(), path).to_string();
-    if remove_dir_all(path_res).is_ok() {}
-}
 
 static BEFORE_ALL: Once = Once::new();
 
 lazy_static! {
-    static ref DATA_INS: Data<Mutex<DataService>> =
-        Data::new(Mutex::new(DataService::new()));
-    // test with mock FileService
-    // static ref FILE_INS: Data<Mutex<FileServiceMock>> = Data::new(Mutex::new(FileServiceMock {}));
+    static ref DATA_INS: Data<Mutex<DataService>> = Data::new(Mutex::new(DataService::new()));
 
     // test with FileService
     static ref FILE_INS: Data<Mutex<cs::file::FileService>> = Data::new(Mutex::new(cs::file::FileService::new(
@@ -104,29 +38,15 @@ fn before_all() {
     let data_ins = DATA_INS.clone();
     let file_ins = FILE_INS.clone();
     BEFORE_ALL.call_once(|| {
-        delete_mock_data();
-
         // start websocket connection
         start_websocket_server(Data::clone(&data_ins), Data::clone(&file_ins), PORT);
 
         // testing files
-        let data_test_path = "data-test".to_string();
-        remove_dir_rec(data_test_path.clone());
-
-        create_dir_f(data_test_path.clone());
-        create_file_f(format!("{}/{}", data_test_path.clone(), "A.txt".to_string()).to_string());
-        create_file_f(format!("{}/{}", data_test_path.clone(), "B.txt".to_string()).to_string());
-        create_file_f(format!("{}/{}", data_test_path.clone(), "C.txt".to_string()).to_string());
-
-        let dir1_path = format!("{}/{}", data_test_path, "dir1").to_string();
-        create_dir_f(dir1_path.clone());
-        create_file_f(format!("{}/{}", dir1_path.clone(), "A.txt".to_string()).to_string());
-        create_file_f(format!("{}/{}", dir1_path.clone(), "B.txt".to_string()).to_string());
-        create_file_f(format!("{}/{}", dir1_path.clone(), "C.txt".to_string()).to_string());
+        setting_up_test_file_tree("data-test".to_string())
     });
 }
 
-fn create_mock_data(clients: Vec<String>) {
+fn create_mock_clients(clients: Vec<String>) {
     for name in clients {
         let data_service = DATA_INS.clone();
         data_service.lock().unwrap().new_client(Client {
@@ -135,10 +55,6 @@ fn create_mock_data(clients: Vec<String>) {
             name: Some(name),
         });
     }
-}
-
-fn gen_msg_id() -> i32 {
-    rand::thread_rng().gen_range(0..10000000)
 }
 
 fn start_socket_with_auth(
@@ -201,7 +117,7 @@ fn ws_auth_test() {
     let client_name = "client_auth_test".to_string();
 
     // create mock clients
-    create_mock_data(vec![client_name.clone()]);
+    create_mock_clients(vec![client_name.clone()]);
 
     // get client key
     let key = get_client_key(client_name.clone());
@@ -241,7 +157,7 @@ fn ws_auth_with_wrong_password_test() {
     // create dummy data for test
     let client_name = "client2".to_string();
 
-    create_mock_data(vec![client_name.clone()]);
+    create_mock_clients(vec![client_name.clone()]);
 
     // start websocket server and get connected with authorization
     start_socket_with_auth(client_name.clone(), "not_valid_key".to_string(), false).unwrap();
@@ -267,7 +183,7 @@ fn ws_get_files_tree_test() {
     // create dummy data for test
     let client_name = "client_get_file_tree".to_string();
 
-    create_mock_data(vec![client_name.clone()]);
+    create_mock_clients(vec![client_name.clone()]);
 
     let key = get_client_key(client_name.clone());
 
@@ -290,7 +206,7 @@ fn ws_copy_file_test() {
     // create dummy data for test
     let client_name = "client_copy_test".to_string();
 
-    create_mock_data(vec![client_name.clone()]);
+    create_mock_clients(vec![client_name.clone()]);
 
     let key = get_client_key(client_name.clone());
 
@@ -326,7 +242,7 @@ fn ws_copy_file_test() {
         let end = start + read_size;
         let file_hash = file_name.hash.clone();
 
-        let copy_msg = String::from(format!("{{\"type\":\"CopyMsg\", \"id\": {id}, \"start\": {start}, \"end\": {end}, \"file_hash\": \"{file_hash}\"}}",));
+        let copy_msg = String::from(format!("{{\"type\":\"CopyMsg\", \"id\": {id}, \"start\": {start}, \"end\": {end}, \"file_hash\": \"{file_hash}\"}}", ));
         println!("{copy_msg}");
 
         // send auth message to the server
